@@ -21,7 +21,7 @@ class CoreOSPublisher(object):
 		self.bucket_name = bucket_name
 
 	def get_new_discovery_url(self):
-		self.new_discovery_url = requests.get("%s%d" % (self.base_discovery_etcd, self.size))
+		self.new_discovery_url = requests.get("%s%s" % (self.base_discovery_etcd, self.size))
 		content = {
 			"url": self.new_discovery_url,
 			"size": self.size,
