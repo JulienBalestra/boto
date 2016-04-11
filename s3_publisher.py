@@ -22,11 +22,14 @@ class CoreOSPublisher(object):
 
 	def get_new_discovery_url(self):
 		self.new_discovery_url = requests.get("%s%s" % (self.base_discovery_etcd, self.size))
+		url_ts = "%d" % time.time()
 		content = {
-			"url": self.new_discovery_url,
-			"size": self.size,
-			"url_ts": time.time()
+			"url": "%s" % self.new_discovery_url,
+			"size": "%s" % self.size,
+			"url_ts": url_ts
 		}
+		print "New discovery object: "
+		json.dumps(content, indent=4)
 		with open(self.discovery_url_file, 'w') as f:
 			json.dump(content, f)
 
