@@ -38,9 +38,9 @@ class CoreOSPublisher(object):
 		bucket.set_acl("public-read", self.discovery_url_file)
 
 	def check(self):
-		if len(self.aws_id) is None:
+		if self.aws_id is None:
 			raise AttributeError("missing AWS_ID")
-		if len(self.aws_secret) is None:
+		if self.aws_secret is None:
 			raise AttributeError("missing AWS_SECRET")
 
 
