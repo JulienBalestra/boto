@@ -21,19 +21,22 @@ class CoreOSPublisher(object):
 		self.bucket_name = bucket_name
 
 	def get_new_discovery_url(self):
-		self.new_discovery_url = requests.get("%s%s" % (self.base_discovery_etcd, self.size))
+		req = requests.get("%s%s" % (self.base_discovery_etcd, self.size))
+		self.new_discovery_url = req.content
 		url_ts = "%d" % time.time()
 		content = {
 			"url": "%s" % self.new_discovery_url,
 			"size": "%s" % self.size,
 			"url_ts": url_ts
 		}
+
 		print "New discovery object: "
-		json.dumps(content, indent=4)
+		print json.dumps(content, indent=4)
+
 		with open(self.discovery_url_file, 'w') as f:
 			json.dump(content, f)
 
-	def upload(self):
+	def upload_discovery(self):
 		conn = S3Connection(self.aws_id, self.aws_secret)
 		bucket = conn.get_bucket(self.bucket_name)
 		new_key = Key(bucket)
@@ -64,4 +67,4 @@ if __name__ == "__main__":
 	publisher = CoreOSPublisher(size, aws_id, aws_secret, bucket_name)
 	publisher.check()
 	publisher.get_new_discovery_url()
-	publisher.upload()
+	publisher.upload_discovery()
