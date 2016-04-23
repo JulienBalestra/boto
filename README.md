@@ -24,11 +24,6 @@ Or use the docker container:
         -e AWS_ID=ID \
         -e AWS_SECRET=SECRET \
          julienbalestra/coreos_publisher 3 bucket_name
-    
-    docker run --rm \
-        -e AWS_ID=ID \
-        -e AWS_SECRET=SECRET \
-         julienbalestra/coreos_publisher 3 bucket_name
          
 Will produce:
 
