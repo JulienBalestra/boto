@@ -9,31 +9,55 @@ from boto.s3.connection import S3Connection
 from boto.s3.key import Key
 
 
-class CoreOSPublisher(object):
+class BucketUpload(object):
+	def __init__(self, aws_id, aws_secret, bucket_name):
+		self.aws_id = aws_id
+		self.aws_secret = aws_secret
+		self.bucket_name = bucket_name
+
+	def check(self):
+		if self.aws_id is None:
+			raise AttributeError("missing AWS_ID")
+		if self.aws_secret is None:
+			raise AttributeError("missing AWS_SECRET")
+
+	def upload(self, local_filename, remote_filename):
+		print "\nUploading %s ..." % local_filename
+		conn = S3Connection(self.aws_id, self.aws_secret)
+		bucket = conn.get_bucket(self.bucket_name)
+		new_key = Key(bucket)
+		new_key.key = "%s" % remote_filename
+		new_key.set_contents_from_filename(local_filename)
+		bucket.set_acl("public-read", remote_filename)
+		print "Upload done: http://{bucket_name}.s3-website-{bucket_location}.amazonaws.com/{discovery_file}\n".format(
+				bucket_name=self.bucket_name,
+				bucket_location=bucket.get_location(),
+				discovery_file=remote_filename)
+
+
+class NewDiscoveryKey(object):
 	peers_port = 2380
 	poller_steps = 2
 	base_discovery_etcd = "https://discovery.etcd.io/new?size="
 	discovery_file = "discovery_etcd.json"
 
-	def __init__(self, size, aws_id, aws_secret, bucket_name, poll_delay=0):
+	def __init__(self, pub_instance, size, poll_delay=0):
 		self.size = size
 		self.new_discovery_url = ""
-		self.aws_id = aws_id
-		self.aws_secret = aws_secret
-		self.bucket_name = bucket_name
 		self.bucket_data = {}
 		self.poll_delay = poll_delay
 		self.registered = []
+		self.publisher = pub_instance
 
 	@staticmethod
-	def write_data(bucket_data, where):
+	def write_discovery_object(bucket_data, local_filename):
 		print "Discovery object: "
 		print json.dumps(bucket_data, indent=4)
 
-		with open(where, 'w') as f:
+		with open(local_filename, 'w') as f:
 			json.dump(bucket_data, f)
 
-	def get_new_discovery_url(self):
+	def create_new_discovery_url(self):
 		print "Request new etcd endpoint"
 		req = requests.get("%s%d" % (self.base_discovery_etcd, self.size))
 		self.new_discovery_url = req.content
@@ -44,28 +68,12 @@ class CoreOSPublisher(object):
 			"url_ts": url_ts,
 			"url_registered": self.registered
 		}
+		self.write_discovery_object(self.bucket_data, self.discovery_file)
+		self.publisher.upload(
+				local_filename=self.discovery_file,
+				remote_filename=self.discovery_file)
 
-	def upload_discovery_file(self):
-		self.write_data(self.bucket_data, self.discovery_file)
-		print "\nUploading %s ..." % self.discovery_file
-		conn = S3Connection(self.aws_id, self.aws_secret)
-		bucket = conn.get_bucket(self.bucket_name)
-		new_key = Key(bucket)
-		new_key.key = "%s" % self.discovery_file
-		new_key.set_contents_from_filename(self.discovery_file)
-		bucket.set_acl("public-read", self.discovery_file)
-		print "Upload done: http://{bucket_name}.s3-website-{bucket_location}.amazonaws.com/{discovery_file}\n".format(
-				bucket_name=self.bucket_name,
-				bucket_location=bucket.get_location(),
-				discovery_file=self.discovery_file)
-
-	def check(self):
-		if self.aws_id is None:
-			raise AttributeError("missing AWS_ID")
-		if self.aws_secret is None:
-			raise AttributeError("missing AWS_SECRET")
-
-	def poll_etcd(self):
+	def _poll_etcd(self):
 		print "Polling %s during %ds..." % (self.new_discovery_url, self.poll_delay)
 		start = time.time()
 		until = start + self.poll_delay
@@ -88,9 +96,18 @@ class CoreOSPublisher(object):
 			print "\nEtcd %d/%d after %ds" % (
 				len(member_list), self.size, time.time() - start)
 			self.bucket_data["url_registered"] = member_list
-			self.upload_discovery_file()
+			self.write_discovery_object(self.bucket_data, self.discovery_file)
+			return True
 		else:
 			print "Polling timeout"
+			return False
+
+	def update_registered(self):
+		success = self._poll_etcd()
+		if success:
+			self.publisher.upload(
+					local_filename=self.discovery_file,
+					remote_filename=self.discovery_file)
 
 
 def fast_arg_parsing():
@@ -107,14 +124,9 @@ if __name__ == "__main__":
 	env_aws_id = os.getenv("AWS_ID")
 	env_aws_secret = os.getenv("AWS_SECRET")
 
-	publisher = CoreOSPublisher(
-			av_size,
-			env_aws_id,
-			env_aws_secret,
-			av_bucket_name,
-			av_poll_delay)
-
+	publisher = BucketUpload(env_aws_id, env_aws_secret, av_bucket_name)
 	publisher.check()
-	publisher.get_new_discovery_url()
-	publisher.upload_discovery_file()
-	publisher.poll_etcd()
+
+	discovery = NewDiscoveryKey(publisher, av_size, av_poll_delay)
+	discovery.create_new_discovery_url()
+	discovery.update_registered()
