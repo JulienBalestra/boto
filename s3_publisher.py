@@ -144,7 +144,7 @@ def fast_arg_parsing():
 
 if __name__ == "__main__":
 	# Fetch args
-	av_size, av_bucket_name, av_poll_delay, av_cloud_config = fast_arg_parsing()
+	av_size, av_bucket_name, av_cloud_config, av_poll_delay = fast_arg_parsing()
 	env_aws_id = os.getenv("AWS_ID")
 	env_aws_secret = os.getenv("AWS_SECRET")
 
