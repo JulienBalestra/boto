@@ -30,9 +30,9 @@ class BucketUpload(object):
 		new_key.set_contents_from_filename(local_filename)
 		bucket.set_acl("public-read", remote_filename)
 		print "Upload done: http://{bucket_name}.s3-website-{bucket_location}.amazonaws.com/{discovery_file}\n".format(
-				bucket_name=self.bucket_name,
-				bucket_location=bucket.get_location(),
-				discovery_file=remote_filename)
+			bucket_name=self.bucket_name,
+			bucket_location=bucket.get_location(),
+			discovery_file=remote_filename)
 
 
 class NewDiscoveryKey(object):
@@ -70,8 +70,8 @@ class NewDiscoveryKey(object):
 		}
 		self.write_discovery_object(self.bucket_data, self.discovery_file)
 		self.publisher.upload(
-				local_filename=self.discovery_file,
-				remote_filename=self.discovery_file)
+			local_filename=self.discovery_file,
+			remote_filename=self.discovery_file)
 
 	def _poll_etcd(self):
 		print "Polling %s during %ds..." % (self.new_discovery_url, self.poll_delay)
@@ -86,7 +86,7 @@ class NewDiscoveryKey(object):
 					value = n["value"]
 					if value not in member_list:
 						print "%ds:\t" % (time.time() - start), value.replace(
-								":%d" % self.peers_port, "\t:%d" % self.peers_port)
+							":%d" % self.peers_port, "\t:%d" % self.peers_port)
 						member_list.append(value)
 			except KeyError:
 				pass
@@ -106,27 +106,58 @@ class NewDiscoveryKey(object):
 		success = self._poll_etcd()
 		if success:
 			self.publisher.upload(
-					local_filename=self.discovery_file,
-					remote_filename=self.discovery_file)
+				local_filename=self.discovery_file,
+				remote_filename=self.discovery_file)
+
+
+class CloudConfig(object):
+	cloud_config_file = "cloud-config.yaml"
+
+	def __init__(self, pub_instance, config_path):
+		self.publisher = pub_instance
+		self.config_path = config_path
+
+	def check(self):
+		if os.path.isfile(self.config_path) is False:
+			raise OSError("Path: %s is invalid")
+
+	def create_remote_config(self):
+		self.publisher.upload(
+			local_filename=self.config_path,
+			remote_filename=self.cloud_config_file)
 
 
 def fast_arg_parsing():
 	args = argparse.ArgumentParser()
 	args.add_argument("size", type=int, help="Etcd cluster size")
 	args.add_argument("bucket_name", type=str, help="Amazon Web Services S3 bucket")
+	args.add_argument("cloud_config", type=str, help="Cloud init path")
 	args.add_argument("--poll", default=600, type=int, help="Polling delay to follow registers")
-	return args.parse_args().size, args.parse_args().bucket_name, args.parse_args().poll
+
+	argument_values = \
+		args.parse_args().size, \
+		args.parse_args().bucket_name, \
+		args.parse_args().cloud_config, \
+		args.parse_args().poll
+	return argument_values
 
 
 if __name__ == "__main__":
 	# Fetch args
-	av_size, av_bucket_name, av_poll_delay = fast_arg_parsing()
+	av_size, av_bucket_name, av_poll_delay, av_cloud_config = fast_arg_parsing()
 	env_aws_id = os.getenv("AWS_ID")
 	env_aws_secret = os.getenv("AWS_SECRET")
 
+	# AWS tool
 	publisher = BucketUpload(env_aws_id, env_aws_secret, av_bucket_name)
 	publisher.check()
 
+	# CloudConfig
+	config = CloudConfig(publisher, av_cloud_config)
+	config.check()
+	config.create_remote_config()
+
+	# Etcd
 	discovery = NewDiscoveryKey(publisher, av_size, av_poll_delay)
 	discovery.create_new_discovery_url()
 	discovery.update_registered()
