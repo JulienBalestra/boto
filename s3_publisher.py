@@ -119,7 +119,7 @@ class CloudConfig(object):
 
 	def check(self):
 		if os.path.isfile(self.config_path) is False:
-			raise OSError("Path: %s is invalid")
+			raise OSError("Path: %s is invalid\nCWD: %s" % (self.config_path, os.getcwd()))
 
 	def create_remote_config(self):
 		self.publisher.upload(
